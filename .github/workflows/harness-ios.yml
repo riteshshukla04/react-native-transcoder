@@ -16,6 +16,10 @@ on:
       - '**/bun.lock'
       - '.github/workflows/harness-ios.yml'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   harness:
     name: On-device Harness suite

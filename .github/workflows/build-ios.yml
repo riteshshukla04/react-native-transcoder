@@ -17,6 +17,10 @@ on:
       - '**/bun.lock'
       - '.github/workflows/build-ios.yml'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     name: xcodebuild (simulator + device)

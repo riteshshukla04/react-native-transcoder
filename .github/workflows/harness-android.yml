@@ -16,6 +16,10 @@ on:
       - '**/bun.lock'
       - '.github/workflows/harness-android.yml'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   NDK_VERSION: 28.2.13676358
   DEVICE_API_LEVEL: '35'
