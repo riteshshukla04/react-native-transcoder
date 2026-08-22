@@ -1,7 +1,7 @@
 {
   "name": "react-native-transcoder",
-  "version": "0.1.0",
-  "description": "\u26a1\ufe0f Fully on-device audio (and later video) transcoding for React Native.",
+  "version": "0.1.1",
+  "description": "⚡️ Fully on-device audio (and later video) transcoding for React Native.",
   "main": "lib/index",
   "module": "lib/index",
   "types": "lib/index.d.ts",
