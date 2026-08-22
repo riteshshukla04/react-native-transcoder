@@ -511,6 +511,23 @@ try {
 The union types are the full engine vocabulary. What a given build can run is whatever
 `getCapabilities()` reports.
 
+## Not implemented yet
+
+The shapes below are frozen and type-checked, but the current build does not act on them. Each
+either fails with a typed error or is accepted and ignored — none of them silently change output.
+
+| API | Status |
+|---|---|
+| `Media.openUrlSource` | Rejects with `capability-not-met`. Option shape is final |
+| `MediaAsset.saveArtworkToFile` | Rejects with `capability-not-met`; `artworkCount` is reported correctly |
+| `TranscodeRequest.gapless` | Accepted and ignored. Decode paths do not yet trim encoder delay/padding, so an AAC round-trip runs ~20 ms long |
+| `TranscodeRequest.memoryLimitByteSize` | Accepted and ignored; pipeline buffers are bounded but not caller-configurable |
+| `AudioTranscodeRequest.sampleFormat` | Accepted and ignored; the encoder's own format is chosen |
+| `outcome` | Recorded on the plan, but there is a single software backend to choose from, so it does not change execution. `lowest-energy` adds an `energy-policy-unavailable` warning |
+| `quality: { mode: 'quality' }` | Falls back to the encoder default bit rate with a `preference-ignored` warning |
+| `overwrite: 'not-guaranteed'` | Rejected with `unsupported-combination` until a destination type needs it |
+| Processors beyond `resample` / `channel-map` / `sample-format-convert` | Declared in `ProcessorId`, not yet runnable |
+
 ## Recipes
 
 ### Transcode a local file with progress
