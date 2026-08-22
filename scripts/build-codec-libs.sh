@@ -16,6 +16,11 @@ set -euo pipefail
 : "${CODEC_HOST:?CODEC_HOST is required}"
 : "${CC:?CC is required}"
 
+# Autoconf runs its preprocessor probes with CPPFLAGS, not CFLAGS. Without the
+# sysroot there, LAME's "ANSI C header files" test fails, STDC_HEADERS goes
+# undefined and machine.h falls back to a bcopy macro current clang rejects.
+export CPPFLAGS="${CPPFLAGS:-${CFLAGS:-}}"
+
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 WORK_DIR="${CODEC_WORK_DIR:-$REPO_ROOT/packages/react-native-transcoder/dependencies/build}"
 JOBS=$(sysctl -n hw.ncpu 2>/dev/null || nproc)

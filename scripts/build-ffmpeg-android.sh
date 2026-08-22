@@ -77,7 +77,10 @@ for ABI in $ABIS; do
   echo "==> configuring ffmpeg for $ABI"
   (
     cd "$BUILD_DIR"
-    # Restrict pkg-config to the cross prefix so libopus resolves there, never on the host.
+    # FFmpeg defaults pkg-config to "${cross_prefix}pkg-config", and there is no
+    # llvm-pkg-config in the NDK; without --pkg-config it silently disables
+    # pkg-config and then cannot find libopus. Pointing PKG_CONFIG_LIBDIR at the
+    # cross prefix alone is what keeps the host's own .pc files out of the build.
     export PKG_CONFIG_LIBDIR="$CODEC_PREFIX/lib/pkgconfig"
     "$SRC_DIR/configure" \
       --prefix="$OUT_DIR" \
@@ -96,6 +99,7 @@ for ABI in $ABIS; do
       --sysroot="$TOOLCHAIN/sysroot" \
       --extra-cflags="$EXTRA_CFLAGS -I$CODEC_PREFIX/include" \
       --extra-ldflags="-Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384 -L$CODEC_PREFIX/lib" \
+      --pkg-config=pkg-config \
       --pkg-config-flags=--static \
       --enable-shared \
       --disable-static \

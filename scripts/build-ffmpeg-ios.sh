@@ -51,10 +51,11 @@ build_slice() {
   mkdir -p "$BUILD_DIR"
 
   # LAME, Opus and Vorbis are static archives linked into the shared FFmpeg libraries.
-  # config.sub in these releases predates arm64, so 32-bit ARM names the host triple.
+  # The triple must say aarch64: naming it arm-apple-darwin makes Opus build its
+  # 32-bit ARM assembly, which Apple's assembler rejects.
   local CODEC_PREFIX="$WORK_DIR/codec-ios-$NAME"
   local CODEC_HOST=x86_64-apple-darwin
-  [ "$ARCH" = "arm64" ] && CODEC_HOST=arm-apple-darwin
+  [ "$ARCH" = "arm64" ] && CODEC_HOST=aarch64-apple-darwin
   CODEC_PREFIX="$CODEC_PREFIX" \
   CODEC_HOST="$CODEC_HOST" \
   CODEC_WORK_DIR="$WORK_DIR" \
