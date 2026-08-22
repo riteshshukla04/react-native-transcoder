@@ -20,6 +20,16 @@ name: Release
 on:
   workflow_dispatch:
     inputs:
+      release-type:
+        description: Version bump
+        type: choice
+        default: auto
+        options:
+          - auto # derive the bump from the conventional commits since the last tag
+          - patch
+          - minor
+          - major
+          - alpha # prerelease: x.y.z-alpha.N, published under the `alpha` dist-tag
       dry-run:
         description: Build and pack, but do not publish, tag or push
         type: boolean
@@ -208,6 +218,20 @@ jobs:
       # and opens the GitHub release; release-it reads it via github.tokenRef.
       - name: Create release
         working-directory: packages/react-native-transcoder
-        run: npm exec -- release-it --ci ${{ inputs.dry-run && '--dry-run' || '' }}
+        run: |
+          set -euo pipefail
+          ARGS=()
+          case "$RELEASE_TYPE" in
+            auto) ;;
+            # release-it publishes a prerelease under its own dist-tag, so an
+            # alpha never becomes what `npm install <pkg>` resolves to.
+            alpha) ARGS+=("--preRelease=alpha") ;;
+            *) ARGS+=("$RELEASE_TYPE") ;;
+          esac
+          if [ "$DRY_RUN" = "true" ]; then ARGS+=("--dry-run"); fi
+          # `auto` leaves ARGS empty, which `set -u` rejects before bash 4.4.
+          npm exec -- release-it --ci ${ARGS[@]+"${ARGS[@]}"}
         env:
+          RELEASE_TYPE: ${{ inputs.release-type }}
+          DRY_RUN: ${{ inputs.dry-run }}
           GITHUB_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
