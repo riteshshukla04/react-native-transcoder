@@ -74,6 +74,8 @@ Cancelling makes FFmpeg fail wherever it happens to be — a read callback, a he
 - Audio processors beyond format conversion, resampling and channel mapping: trim, concat, gain,
   fade, loudness, limiter, dither.
 - Artwork extraction (`MediaAsset.saveArtworkToFile`).
-- Gapless trimming on decode paths: the AAC round-trip is ~20 ms longer than the source because
-  encoder delay and padding are not yet compensated.
+- Gapless trimming: an AAC round-trip is ~888 samples longer than the source because encoder
+  priming is not compensated. The reference `ffmpeg` CLI with the same encoder produces exactly the
+  same length, so this is a shared upstream default rather than a defect here — but it still has to
+  be fixed before the gapless guarantee can be claimed.
 - `tools/media-bench` and `tools/capability-manifest`.

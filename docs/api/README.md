@@ -520,7 +520,7 @@ either fails with a typed error or is accepted and ignored — none of them sile
 |---|---|
 | `Media.openUrlSource` | Rejects with `capability-not-met`. Option shape is final |
 | `MediaAsset.saveArtworkToFile` | Rejects with `capability-not-met`; `artworkCount` is reported correctly |
-| `TranscodeRequest.gapless` | Accepted and ignored. Decode paths do not yet trim encoder delay/padding, so an AAC round-trip runs ~20 ms long |
+| `TranscodeRequest.gapless` | Accepted and ignored. Encoder priming is not compensated, so an AAC round-trip runs ~888 samples long — byte-for-byte the same as `ffmpeg` CLI with the same encoder, but not yet sample-exact |
 | `TranscodeRequest.memoryLimitByteSize` | Accepted and ignored; pipeline buffers are bounded but not caller-configurable |
 | `AudioTranscodeRequest.sampleFormat` | Accepted and ignored; the encoder's own format is chosen |
 | `outcome` | Recorded on the plan, but there is a single software backend to choose from, so it does not change execution. `lowest-energy` adds an `energy-policy-unavailable` warning |
