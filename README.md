@@ -12,16 +12,22 @@ Audio is the first product. Video shares the same lifecycle, I/O, packet and job
 
 ## Verified
 
-A 2-second 44.1 kHz mono WAV generated in JavaScript, transcoded on device to AAC in M4A, then
-decoded back:
+Not just "the API returns something" — the produced media is checked against reference ffmpeg.
 
 | Check | Result |
 |---|---|
-| Reference `ffprobe` on the device output | `aac`, 44100 Hz, mono, 2.000000 s, 129968 bps |
-| Dominant frequency after decode | 440.0 Hz (source: 440 Hz) |
-| RMS after decode | 18534 vs 18536 in the source |
-| On-device round-trip WAV vs host `ffmpeg` decode | 89088 / 89088 samples identical |
-| Android output vs iOS output | byte-identical |
+| Every advertised codec/container pair, encoded and re-probed on device | **42 / 42** |
+| On-device Harness suite (iOS sim, Android emulator, physical Android) | **39 / 39** on each |
+| Device-produced files probed and fully decoded by host `ffmpeg` | **108 / 108** |
+| Synthetic tone: device round-trip WAV vs host decode | 89088 / 89088 samples identical |
+| Android output vs iOS output for the same input | byte-identical |
+| Real 8 s 48 kHz stereo MP3 → AAC/M4A | 8.000 s, 384 000 samples, 11.3× realtime |
+| …its tone energies at 220/277/330 Hz vs the source | within 0.1%, no off-band artifacts |
+| Real AAC/M4A → FLAC on device vs host decode of the source | bit-for-bit identical |
+
+Manual QA runs through the example app's UI on a physical device — probe, transcode, live
+progress, cancel, and an in-app "run the full matrix" button — not only through the test harness.
+`scripts/push-test-media.sh` puts real MP3/AAC/ALAC/FLAC/Opus/24-bit-WAV files on the device for it.
 
 ## Supported architectures
 
