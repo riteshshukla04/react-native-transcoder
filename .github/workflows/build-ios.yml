@@ -42,13 +42,21 @@ jobs:
           path: packages/react-native-transcoder/dependencies/prebuilt/ios
           key: ffmpeg-ios-${{ hashFiles('scripts/build-ffmpeg-ios.sh') }}
 
-      - name: Install FFmpeg build tools
-        if: steps.ffmpeg-cache.outputs.cache-hit != 'true'
-        run: brew install nasm
-
-      - name: Cross-build FFmpeg
-        if: steps.ffmpeg-cache.outputs.cache-hit != 'true'
-        run: ./scripts/build-ffmpeg-ios.sh
+      - name: Cross-build FFmpeg when the cache is missing or partial
+        run: |
+          set -euo pipefail
+          COMPLETE=1
+          for LIB in avutil swresample avcodec avformat; do
+            if [ ! -d "packages/react-native-transcoder/dependencies/prebuilt/ios/$LIB.xcframework" ]; then
+              COMPLETE=0
+            fi
+          done
+          if [ "$COMPLETE" = "1" ]; then
+            echo "xcframeworks restored from cache"
+            exit 0
+          fi
+          brew install nasm
+          ./scripts/build-ffmpeg-ios.sh
 
       - name: Verify every slice is present
         run: |

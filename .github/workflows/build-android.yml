@@ -45,15 +45,25 @@ jobs:
         uses: actions/cache@v4
         with:
           path: packages/react-native-transcoder/dependencies/prebuilt/android
-          key: ffmpeg-android-${{ env.NDK_VERSION }}-${{ hashFiles('scripts/build-ffmpeg-android.sh') }}
+          key: ffmpeg-android-all-${{ env.NDK_VERSION }}-${{ hashFiles('scripts/build-ffmpeg-android.sh') }}
 
-      - name: Install FFmpeg build tools
-        if: steps.ffmpeg-cache.outputs.cache-hit != 'true'
-        run: sudo apt-get update && sudo apt-get install -y nasm
-
-      - name: Cross-build FFmpeg
-        if: steps.ffmpeg-cache.outputs.cache-hit != 'true'
-        run: ANDROID_NDK_HOME=$ANDROID_HOME/ndk/${{ env.NDK_VERSION }} ./scripts/build-ffmpeg-android.sh
+      # Self-healing: a partially populated cache rebuilds only what it is missing.
+      - name: Cross-build FFmpeg for any missing ABI
+        run: |
+          set -euo pipefail
+          MISSING=""
+          for ABI in armeabi-v7a arm64-v8a x86 x86_64; do
+            if [ ! -f "packages/react-native-transcoder/dependencies/prebuilt/android/$ABI/lib/libavcodec.so" ]; then
+              MISSING="$MISSING $ABI"
+            fi
+          done
+          if [ -z "$MISSING" ]; then
+            echo "all ABIs restored from cache"
+            exit 0
+          fi
+          echo "building:$MISSING"
+          sudo apt-get update && sudo apt-get install -y nasm
+          ANDROID_NDK_HOME=$ANDROID_HOME/ndk/${{ env.NDK_VERSION }} ABIS="$MISSING" ./scripts/build-ffmpeg-android.sh
 
       - name: Restore Gradle cache
         uses: actions/cache@v4

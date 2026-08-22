@@ -48,15 +48,17 @@ jobs:
         uses: actions/cache@v4
         with:
           path: packages/react-native-transcoder/dependencies/prebuilt/android
-          key: ffmpeg-android-${{ env.NDK_VERSION }}-${{ hashFiles('scripts/build-ffmpeg-android.sh') }}
+          key: ffmpeg-android-x86_64-${{ env.NDK_VERSION }}-${{ hashFiles('scripts/build-ffmpeg-android.sh') }}
 
-      - name: Install FFmpeg build tools
-        if: steps.ffmpeg-cache.outputs.cache-hit != 'true'
-        run: sudo apt-get update && sudo apt-get install -y nasm
-
-      - name: Cross-build FFmpeg
-        if: steps.ffmpeg-cache.outputs.cache-hit != 'true'
-        run: ANDROID_NDK_HOME=$ANDROID_HOME/ndk/${{ env.NDK_VERSION }} ABIS=x86_64 ./scripts/build-ffmpeg-android.sh
+      - name: Cross-build FFmpeg when the cache is missing or partial
+        run: |
+          set -euo pipefail
+          if [ -f "packages/react-native-transcoder/dependencies/prebuilt/android/x86_64/lib/libavcodec.so" ]; then
+            echo "x86_64 restored from cache"
+            exit 0
+          fi
+          sudo apt-get update && sudo apt-get install -y nasm
+          ANDROID_NDK_HOME=$ANDROID_HOME/ndk/${{ env.NDK_VERSION }} ABIS=x86_64 ./scripts/build-ffmpeg-android.sh
 
       - name: Restore Gradle cache
         uses: actions/cache@v4

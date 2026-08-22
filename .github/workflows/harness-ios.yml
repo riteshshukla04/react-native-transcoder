@@ -41,17 +41,44 @@ jobs:
           path: packages/react-native-transcoder/dependencies/prebuilt/ios
           key: ffmpeg-ios-${{ hashFiles('scripts/build-ffmpeg-ios.sh') }}
 
-      - name: Install FFmpeg build tools
-        if: steps.ffmpeg-cache.outputs.cache-hit != 'true'
-        run: brew install nasm
-
-      - name: Cross-build FFmpeg
-        if: steps.ffmpeg-cache.outputs.cache-hit != 'true'
-        run: ./scripts/build-ffmpeg-ios.sh
+      - name: Cross-build FFmpeg when the cache is missing or partial
+        run: |
+          set -euo pipefail
+          COMPLETE=1
+          for LIB in avutil swresample avcodec avformat; do
+            if [ ! -d "packages/react-native-transcoder/dependencies/prebuilt/ios/$LIB.xcframework" ]; then
+              COMPLETE=0
+            fi
+          done
+          if [ "$COMPLETE" = "1" ]; then
+            echo "xcframeworks restored from cache"
+            exit 0
+          fi
+          brew install nasm
+          ./scripts/build-ffmpeg-ios.sh
 
       - name: Install pods
         working-directory: example/ios
         run: bundle exec pod install
+
+      - name: Boot a simulator
+        run: ./scripts/ci-boot-simulator.sh
+
+      - name: Build the example app
+        working-directory: example/ios
+        run: |
+          xcodebuild -workspace TranscoderExample.xcworkspace \
+            -scheme TranscoderExample \
+            -sdk iphonesimulator -configuration Debug \
+            -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" \
+            -derivedDataPath build \
+            build
+
+      - name: Install the app on the simulator
+        run: |
+          xcrun simctl install "$SIMULATOR_UDID" \
+            example/ios/build/Build/Products/Debug-iphonesimulator/TranscoderExample.app
+
       - name: Run Harness tests
         working-directory: example
         run: bun run test:harness --harnessRunner ios
