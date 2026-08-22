@@ -2,83 +2,10 @@
 
 Fully on-device media transcoding for React Native, built on one portable C++20 engine and
 [Nitro Modules](https://github.com/mrousavy/nitro).
-
-Audio is the first product. Video shares the same lifecycle, I/O, packet and job model.
-
-> **Status: alpha.** Probing, planning, full transcode, packet remux, progress, cancellation and
-> atomic output work on device on Android and iOS, backed by a pinned LGPL FFmpeg 7.1.1 audio
-> profile. Every Wave A audio codec now encodes as well as decodes (see the codec table); URL
-> sources, platform codec backends and the audio processors beyond
-> resample/channel-map/format-convert are not implemented yet.
-
-## Verified
-
-Not just "the API returns something" — the produced media is checked against reference ffmpeg.
-
-| Check | Result |
-|---|---|
-| Every advertised codec/container pair, encoded and re-probed on device | **42 / 42** |
-| …after adding MP3/Opus/Vorbis encode: every advertised pair muxed **and demuxed back** against the pinned profile | **56 / 56** (host build) |
-| On-device Harness suite (iOS sim, Android emulator, physical Android) | **45 / 45** on each |
-| Device-produced files probed and fully decoded by host `ffmpeg` | **108 / 108** |
-| Synthetic tone: device round-trip WAV vs host decode | 89088 / 89088 samples identical |
-| Android output vs iOS output for the same input | byte-identical |
-| Real 8 s 48 kHz stereo MP3 → AAC/M4A | 8.000 s, 384 000 samples, 11.3× realtime |
-| …its tone energies at 220/277/330 Hz vs the source | within 0.1%, no off-band artifacts |
-| Real AAC/M4A → FLAC on device vs host decode of the source | bit-for-bit identical |
-| Metadata `copy` / `replace` / `merge` / `drop`, including through a packet remux | verified per tag |
-
-The device rows above were measured before MP3/Opus/Vorbis encode was enabled. The new profile is
-verified so far only on a host build of the identical pinned FFmpeg configuration, where all 56
-advertised pairs both mux and demux back to the codec they claim; the on-device numbers need a
-re-run before they can be claimed for this profile.
-
-The pair count went 42 → 56: MP3, Opus and Vorbis encode add 14 combinations and the MP3 container
-adds one, while `flac`-in-`caf` was withdrawn. FFmpeg's CAF muxer writes a `kuki` magic cookie only
-for ALAC, AMR-NB and QDM2, so a FLAC stream is written without its `STREAMINFO` and its own demuxer
-then rejects the file. That pair was advertised before this change and cannot survive a round trip,
-so it now sits alongside `aac`-in-`caf` in `isKnownBrokenPair`.
-
-Manual QA runs through the example app's UI on a physical device — probe, transcode, live
-progress, cancel, and an in-app "run the full matrix" button — not only through the test harness.
-`scripts/push-test-media.sh` puts real MP3/AAC/ALAC/FLAC/Opus/24-bit-WAV files on the device for it.
-
-## Supported architectures
-
-| Platform | Architectures | Runtime tested |
-|---|---|---|
-| Android | `arm64-v8a`, `armeabi-v7a`, `x86`, `x86_64` | arm64 device + emulator locally, `x86_64` emulator in CI |
-| iOS | device `arm64`, simulator `arm64` + `x86_64` | simulator `arm64` locally; device build verified in CI |
-
-FFmpeg is cross-built per architecture by `scripts/build-ffmpeg-android.sh` and
-`scripts/build-ffmpeg-ios.sh`. Android ships four 16 KB-page-aligned `.so` sets; iOS ships
-dynamic XCFrameworks embedded in the app bundle.
-
-## Codecs in this build
-
-| Codec | Decode | Encode |
-|---|---|---|
-| PCM (u8/s16/s24/s32/f32) | yes | yes |
-| AAC-LC | yes | yes |
-| FLAC | yes | yes |
-| ALAC | yes | yes |
-| MP3 | yes | yes (LAME) |
-| Opus | yes | yes (libopus) |
-| Vorbis | yes | yes (libvorbis) |
-
-LAME, Opus and Vorbis are built from pinned source by `scripts/build-codec-libs.sh` and linked
-statically into the shared FFmpeg libraries, which stay dynamic and replaceable. See
-[Licensing](docs/licensing/README.md) — LAME is LGPL, so that replaceability is load-bearing.
-
-Containers: WAV, AIFF, CAF, M4A, MP4, ADTS, MP3, FLAC, Ogg, Matroska. Ask the engine rather than
-this table — `Media.getCapabilities()` reports what the shipped binary can actually do.
-
-## What it is
-
-- One TypeScript contract, one shared C++ implementation, Android and iOS.
-- Everything runs on the user's device. There is no transcoding server and no upload path.
-- Callers request outcomes (`fastest`, `highest-quality`, …) — never FFmpeg, AudioToolbox or MediaCodec.
-- Runtime capability discovery: the engine reports exactly what this build, on this device, can do.
+Decodes and encodes PCM, AAC-LC, FLAC, ALAC, MP3, Opus and Vorbis across WAV, AIFF, CAF, M4A, MP4,
+ADTS, MP3, FLAC, Ogg and Matroska.
+Nothing leaves the device — there is no transcoding server and no upload path — and the engine
+reports at runtime exactly what the shipped binary can do.
 
 ## Install
 
@@ -86,6 +13,36 @@ this table — `Media.getCapabilities()` reports what the shipped binary can act
 bun add react-native-transcoder react-native-nitro-modules
 cd ios && pod install
 ```
+
+## API
+
+`Media` is the single autolinked entry point.
+
+| Member | Returns | Description |
+|---|---|---|
+| `Media.version` | `string` | Engine version. |
+| `Media.scratchDirectory` | `string` | Where the engine stages temporary files. |
+| `Media.prewarm()` | `Promise<void>` | Initialize the engine up front instead of on first use. |
+| `Media.getCapabilities()` | `Promise<MediaCapabilitiesSnapshot>` | Codecs, containers and processors this build supports. |
+| `Media.openFileSource(options)` | `Promise<MediaSource>` | Open a local file by `uri`. |
+| `Media.openMemorySource(buffer)` | `MediaSource` | Open an `ArrayBuffer`. Synchronous. |
+| `Media.openUrlSource(options)` | `Promise<MediaSource>` | **Not implemented yet** — throws `capability-not-met`. |
+| `Media.openFileDestination(options)` | `Promise<MediaDestination>` | Output file, with an `overwrite` policy. |
+| `Media.probe(source)` | `Promise<MediaAsset>` | Read container, streams, duration and metadata. |
+| `Media.resolve(source, destination, request)` | `Promise<ResolvedPlan>` | Resolve a request into a plan without running it. |
+| `Media.createTranscodeJob(source, destination, request)` | `Promise<TranscodeJob>` | Plan and build a runnable job. |
+| `Media.createTranscodeJobFromPlan(source, destination, plan)` | `Promise<TranscodeJob>` | Build a job from an already-resolved plan. |
+
+Each call returns a native-owned handle:
+
+| Type | Key members |
+|---|---|
+| `MediaSource` | `kind`, `isSeekable`, `isProbed`, `byteLength?`, `close()` |
+| `MediaDestination` | `kind`, `atomicity`, `close()` |
+| `MediaAsset` | `container?`, `containerFormatName`, `audioStreams`, `durationSeconds?`, `byteSize?`, `hasVideo`, `chapters`, `artworkCount`, `getMetadata()`, `saveArtworkToFile()` (**not implemented yet**), `close()` |
+| `ResolvedPlan` | `path`, `outputContainer`, `outputCodec?`, `outputSampleRate?`, `outputChannelCount?`, `outputBitsPerSecond?`, `estimatedOutputByteSize?`, `conversions`, `warnings`, `isTwoPass`, `toJson()`, `close()` |
+| `TranscodeJob` | `state`, `run()`, `cancel()`, `addOnProgressListener(listener)`, `setProgressUpdatesPerSecond(n)`, `exportDiagnostics()`, `close()` |
+| `TranscodeReport` | `outputUri?`, `outputByteSize`, `outputContainer`, `outputCodec?`, `outputDurationSeconds?`, `outputSampleRate?`, `outputChannelCount?`, `elapsedSeconds`, `speedRatio`, `samplesProcessed`, `warnings`, `wasCancelled`, `didCommitOutput`, `close()` |
 
 ## Usage
 
@@ -125,48 +82,6 @@ try {
 
 Every resource is native-owned and has an idempotent `close()`. Close on every terminal path.
 
-## Documentation
-
-- [API reference](docs/api/README.md) — every method, option and type, with recipes.
-- [Architecture decisions](docs/architecture/DECISIONS.md) — deviations from the plan and why.
-- [Licensing](docs/licensing/README.md) — FFmpeg obligations and the release checklist.
-
-## Repository layout
-
-```
-packages/react-native-transcoder/   the npm package
-  src/specs/                        .nitro.ts HybridObject specs (the frozen public API)
-  cpp/engine/                       portable engine: errors, executor, byte I/O, paths
-  cpp/hybrid/                       HybridObject implementations
-  cpp/backends/                     ffmpeg / apple / android backends (not yet populated)
-  nitrogen/generated/               nitrogen output — never edited by hand
-example/                            React Native example app + on-device Harness suite
-docs/                               architecture, API, codec and licensing notes
-```
-
-## Development
-
-```sh
-bun install                          # hoisted install at the repo root
-./scripts/build-ffmpeg-android.sh    # cross-build FFmpeg for all four Android ABIs
-./scripts/build-ffmpeg-ios.sh        # cross-build the iOS XCFrameworks
-bun run specs                        # regenerate nitrogen bindings from the .nitro.ts specs
-bun run typecheck
-bun run lint                # eslint + prettier
-bun run lint-cpp            # clang-format
-```
-
-On-device tests run through `react-native-harness`:
-
-```sh
-cd example
-bun run test:harness --harnessRunner ios             # booted simulator
-bun run test:harness --harnessRunner android         # emulator
-bun run test:harness --harnessRunner android-device  # physical device
-```
-
-CI is the source of truth for pass/fail. See `.github/workflows/`.
-
 ## License
 
-MIT for this package. Codec dependencies carry their own licenses; see `docs/licensing/`.
+MIT. Codec dependencies carry their own licenses; see [docs/licensing](docs/licensing/README.md).
