@@ -1,0 +1,39 @@
+{
+  "profile": "mobile-core",
+  "dependencies": [
+    {
+      "name": "ffmpeg",
+      "version": "7.1.1",
+      "source": "https://ffmpeg.org/releases/ffmpeg-7.1.1.tar.xz",
+      "sha256": "733984395e0dbbe5c046abda2dc49a5544e7e0e1e2366bba849222ae9e3a03b1",
+      "license": "LGPL-2.1-or-later",
+      "linkage": "shared",
+      "configureFlags": [
+        "--disable-gpl",
+        "--disable-nonfree",
+        "--enable-shared",
+        "--disable-static"
+      ],
+      "patches": [],
+      "components": {
+        "demuxers": "wav,aiff,caf,mov,mp3,flac,ogg,matroska,aac,w64,pcm_s16le,pcm_f32le",
+        "muxers": "wav,aiff,caf,ipod,mp4,mp3,flac,ogg,matroska,adts,w64",
+        "decoders": "pcm_*,aac,mp3,flac,alac,vorbis,opus",
+        "encoders": "pcm_*,aac,flac,alac"
+      },
+      "architectures": {
+        "android": [
+          "arm64-v8a",
+          "armeabi-v7a",
+          "x86",
+          "x86_64"
+        ],
+        "ios": [
+          "device arm64",
+          "simulator arm64",
+          "simulator x86_64"
+        ]
+      }
+    }
+  ]
+}

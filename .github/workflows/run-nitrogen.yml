@@ -1,0 +1,20 @@
+name: Nitrogen
+
+on:
+  push:
+    branches: [main]
+    paths: ['packages/react-native-transcoder/src/specs/**', 'packages/react-native-transcoder/nitro.json', '.github/workflows/run-nitrogen.yml']
+  pull_request:
+    paths: ['packages/react-native-transcoder/src/specs/**', 'packages/react-native-transcoder/nitro.json', '.github/workflows/run-nitrogen.yml']
+
+jobs:
+  nitrogen:
+    name: Generated bindings are up to date
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install
+      - run: bun run specs
+      - name: Fail when nitrogen output drifted from the specs
+        run: git diff --exit-code -- packages/react-native-transcoder/nitrogen

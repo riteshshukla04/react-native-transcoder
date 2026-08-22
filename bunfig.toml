@@ -1,0 +1,3 @@
+[install]
+# Hoist every dependency into the repo-root node_modules — no nested package node_modules.
+linker = "hoisted"

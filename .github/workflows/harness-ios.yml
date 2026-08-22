@@ -1,0 +1,48 @@
+name: Harness iOS
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'packages/react-native-transcoder/**'
+      - 'example/**'
+      - '**/bun.lock'
+      - '.github/workflows/harness-ios.yml'
+  pull_request:
+    paths:
+      - 'packages/react-native-transcoder/**'
+      - 'example/**'
+      - '**/bun.lock'
+      - '.github/workflows/harness-ios.yml'
+
+jobs:
+  harness:
+    name: On-device Harness suite
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - uses: ruby/setup-ruby@v1
+        with:
+          working-directory: example
+          bundler-cache: true
+      - run: bun install
+
+      - name: Restore FFmpeg XCFrameworks
+        id: ffmpeg-cache
+        uses: actions/cache@v4
+        with:
+          path: packages/react-native-transcoder/dependencies/prebuilt/ios
+          key: ffmpeg-ios-${{ hashFiles('scripts/build-ffmpeg-ios.sh') }}
+
+      - name: Cross-build FFmpeg
+        if: steps.ffmpeg-cache.outputs.cache-hit != 'true'
+        run: ./scripts/build-ffmpeg-ios.sh
+
+      - name: Install pods
+        working-directory: example/ios
+        run: bundle exec pod install
+      - name: Run Harness tests
+        working-directory: example
+        run: bun run test:harness --harnessRunner ios

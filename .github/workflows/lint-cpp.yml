@@ -1,0 +1,18 @@
+name: Lint C++
+
+on:
+  push:
+    branches: [main]
+    paths: ['packages/react-native-transcoder/cpp/**', '.clang-format', '.clang-tidy', '.github/workflows/lint-cpp.yml']
+  pull_request:
+    paths: ['packages/react-native-transcoder/cpp/**', '.clang-format', '.clang-tidy', '.github/workflows/lint-cpp.yml']
+
+jobs:
+  clang-format:
+    name: clang-format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install clang-format
+        run: sudo apt-get update && sudo apt-get install -y clang-format
+      - run: ./scripts/clang-format.sh --check
