@@ -74,7 +74,8 @@
     },
     "github": {
       "release": true,
-      "releaseName": "v${version}"
+      "releaseName": "v${version}",
+      "tokenRef": "PERSONAL_TOKEN"
     },
     "plugins": {
       "@release-it/conventional-changelog": {

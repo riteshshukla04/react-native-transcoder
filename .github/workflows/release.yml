@@ -11,6 +11,11 @@ name: Release
 #   Workflow     release.yml
 # npm then mints a short-lived credential from the `id-token: write` permission
 # below, and generates provenance attestations automatically.
+#
+# The one secret this needs is PERSONAL_TOKEN: a fine-grained PAT on this repo
+# with Contents: Read and write. It pushes the release commit and tag and opens
+# the GitHub release. (A secret cannot be called GITHUB_TOKEN — that prefix is
+# reserved — and the built-in token is capped at read on this repo.)
 
 on:
   workflow_dispatch:
@@ -119,12 +124,13 @@ jobs:
     needs: [ffmpeg-android, ffmpeg-ios]
     runs-on: ubuntu-latest
     permissions:
-      contents: write # push the release commit and tag, create the GitHub release
-      id-token: write # npm provenance / trusted publishing
+      contents: read # PERSONAL_TOKEN does the pushing, not the built-in token
+      id-token: write # npm trusted publishing over OIDC
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0 # the changelog is generated from full history
+          token: ${{ secrets.PERSONAL_TOKEN }}
 
       - uses: oven-sh/setup-bun@v2
 
@@ -195,9 +201,11 @@ jobs:
           git config user.name "${GITHUB_ACTOR}"
           git config user.email "${GITHUB_ACTOR}@users.noreply.github.com"
 
-      # No token: npm authenticates over OIDC and attaches provenance itself.
+      # npm needs no token at all — it authenticates over OIDC and attaches
+      # provenance itself. PERSONAL_TOKEN only pushes the release commit and tag
+      # and opens the GitHub release; release-it reads it via github.tokenRef.
       - name: Create release
         working-directory: packages/react-native-transcoder
         run: npm exec -- release-it --ci ${{ inputs.dry-run && '--dry-run' || '' }}
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PERSONAL_TOKEN: ${{ secrets.PERSONAL_TOKEN }}
