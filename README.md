@@ -7,8 +7,9 @@ Audio is the first product. Video shares the same lifecycle, I/O, packet and job
 
 > **Status: alpha.** Probing, planning, full transcode, packet remux, progress, cancellation and
 > atomic output work on device on Android and iOS, backed by a pinned LGPL FFmpeg 7.1.1 audio
-> profile. Wave A is partially covered (see the codec table); URL sources, platform codec backends
-> and the audio processors beyond resample/channel-map/format-convert are not implemented yet.
+> profile. Every Wave A audio codec now encodes as well as decodes (see the codec table); URL
+> sources, platform codec backends and the audio processors beyond
+> resample/channel-map/format-convert are not implemented yet.
 
 ## Verified
 
@@ -17,6 +18,7 @@ Not just "the API returns something" — the produced media is checked against r
 | Check | Result |
 |---|---|
 | Every advertised codec/container pair, encoded and re-probed on device | **42 / 42** |
+| …after adding MP3/Opus/Vorbis encode: every advertised pair muxed **and demuxed back** against the pinned profile | **56 / 56** (host build) |
 | On-device Harness suite (iOS sim, Android emulator, physical Android) | **45 / 45** on each |
 | Device-produced files probed and fully decoded by host `ffmpeg` | **108 / 108** |
 | Synthetic tone: device round-trip WAV vs host decode | 89088 / 89088 samples identical |
@@ -25,6 +27,17 @@ Not just "the API returns something" — the produced media is checked against r
 | …its tone energies at 220/277/330 Hz vs the source | within 0.1%, no off-band artifacts |
 | Real AAC/M4A → FLAC on device vs host decode of the source | bit-for-bit identical |
 | Metadata `copy` / `replace` / `merge` / `drop`, including through a packet remux | verified per tag |
+
+The device rows above were measured before MP3/Opus/Vorbis encode was enabled. The new profile is
+verified so far only on a host build of the identical pinned FFmpeg configuration, where all 56
+advertised pairs both mux and demux back to the codec they claim; the on-device numbers need a
+re-run before they can be claimed for this profile.
+
+The pair count went 42 → 56: MP3, Opus and Vorbis encode add 14 combinations and the MP3 container
+adds one, while `flac`-in-`caf` was withdrawn. FFmpeg's CAF muxer writes a `kuki` magic cookie only
+for ALAC, AMR-NB and QDM2, so a FLAC stream is written without its `STREAMINFO` and its own demuxer
+then rejects the file. That pair was advertised before this change and cannot survive a round trip,
+so it now sits alongside `aac`-in-`caf` in `isKnownBrokenPair`.
 
 Manual QA runs through the example app's UI on a physical device — probe, transcode, live
 progress, cancel, and an in-app "run the full matrix" button — not only through the test harness.
@@ -49,11 +62,16 @@ dynamic XCFrameworks embedded in the app bundle.
 | AAC-LC | yes | yes |
 | FLAC | yes | yes |
 | ALAC | yes | yes |
-| MP3 | yes | not yet (needs `libmp3lame`) |
-| Opus, Vorbis | yes | not yet (needs `libopus` / `libvorbis`) |
+| MP3 | yes | yes (LAME) |
+| Opus | yes | yes (libopus) |
+| Vorbis | yes | yes (libvorbis) |
 
-Containers: WAV, AIFF, CAF, M4A, MP4, ADTS, FLAC, Ogg, Matroska. Ask the engine rather than this
-table — `Media.getCapabilities()` reports what the shipped binary can actually do.
+LAME, Opus and Vorbis are built from pinned source by `scripts/build-codec-libs.sh` and linked
+statically into the shared FFmpeg libraries, which stay dynamic and replaceable. See
+[Licensing](docs/licensing/README.md) — LAME is LGPL, so that replaceability is load-bearing.
+
+Containers: WAV, AIFF, CAF, M4A, MP4, ADTS, MP3, FLAC, Ogg, Matroska. Ask the engine rather than
+this table — `Media.getCapabilities()` reports what the shipped binary can actually do.
 
 ## What it is
 

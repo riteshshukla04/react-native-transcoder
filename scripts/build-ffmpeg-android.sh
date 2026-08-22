@@ -25,10 +25,13 @@ test -d "$TOOLCHAIN" || { echo "NDK toolchain not found at $TOOLCHAIN" >&2; exit
 COMPONENTS=(
   --enable-demuxer=wav,aiff,caf,mov,mp3,flac,ogg,matroska,aac,w64,pcm_s16le,pcm_f32le
   --enable-muxer=wav,aiff,caf,ipod,mp4,mp3,flac,ogg,matroska,adts,w64
-  --enable-decoder=pcm_s16le,pcm_s16be,pcm_s24le,pcm_s32le,pcm_f32le,pcm_f64le,pcm_u8,pcm_alaw,pcm_mulaw,aac,mp3,mp3float,flac,alac,vorbis,opus
-  --enable-encoder=pcm_s16le,pcm_s16be,pcm_s24le,pcm_s32le,pcm_f32le,pcm_u8,aac,flac,alac
+  --enable-decoder=pcm_s8,pcm_s16le,pcm_s16be,pcm_s24le,pcm_s24be,pcm_s32le,pcm_s32be,pcm_f32le,pcm_f32be,pcm_f64le,pcm_f64be,pcm_u8,pcm_alaw,pcm_mulaw,aac,mp3,mp3float,flac,alac,vorbis,opus
+  --enable-encoder=pcm_s16le,pcm_s16be,pcm_s24le,pcm_s32le,pcm_f32le,pcm_u8,aac,flac,alac,libmp3lame,libopus,libvorbis
   --enable-parser=aac,aac_latm,flac,mpegaudio,vorbis,opus
   --enable-bsf=aac_adtstoasc,extract_extradata
+  --enable-libmp3lame
+  --enable-libopus
+  --enable-libvorbis
 )
 
 mkdir -p "$WORK_DIR"
@@ -43,14 +46,28 @@ fi
 for ABI in $ABIS; do
   EXTRA_CFLAGS=""
   EXTRA_CONFIGURE=""
+  # TRIPLE names the NDK clang wrapper; HOST_TRIPLE is what autotools config.sub accepts.
   case "$ABI" in
-    arm64-v8a)   ARCH=aarch64; TRIPLE=aarch64-linux-android;    CPU=armv8-a ;;
-    armeabi-v7a) ARCH=arm;     TRIPLE=armv7a-linux-androideabi; CPU=armv7-a; EXTRA_CFLAGS="-mfpu=neon -mfloat-abi=softfp" ;;
-    x86_64)      ARCH=x86_64;  TRIPLE=x86_64-linux-android;     CPU=x86-64 ;;
+    arm64-v8a)   ARCH=aarch64; TRIPLE=aarch64-linux-android;    HOST_TRIPLE=aarch64-linux-android;   CPU=armv8-a ;;
+    armeabi-v7a) ARCH=arm;     TRIPLE=armv7a-linux-androideabi; HOST_TRIPLE=arm-linux-androideabi;   CPU=armv7-a; EXTRA_CFLAGS="-mfpu=neon -mfloat-abi=softfp" ;;
+    x86_64)      ARCH=x86_64;  TRIPLE=x86_64-linux-android;     HOST_TRIPLE=x86_64-linux-android;    CPU=x86-64 ;;
     # 32-bit x86 asm is not PIC-safe in a shared build; the emulator-only ABI takes the C path.
-    x86)         ARCH=x86;     TRIPLE=i686-linux-android;       CPU=i686; EXTRA_CONFIGURE="--disable-asm" ;;
+    x86)         ARCH=x86;     TRIPLE=i686-linux-android;       HOST_TRIPLE=i686-linux-android;      CPU=i686; EXTRA_CONFIGURE="--disable-asm" ;;
     *) echo "unsupported ABI: $ABI" >&2; exit 1 ;;
   esac
+
+  # LAME, Opus and Vorbis are static archives linked into the shared FFmpeg libraries.
+  CODEC_PREFIX="$WORK_DIR/codec-android-$ABI"
+  CODEC_PREFIX="$CODEC_PREFIX" \
+  CODEC_HOST="$HOST_TRIPLE" \
+  CODEC_WORK_DIR="$WORK_DIR" \
+  CC="$TOOLCHAIN/bin/${TRIPLE}${MIN_SDK}-clang" \
+  AR="$TOOLCHAIN/bin/llvm-ar" \
+  RANLIB="$TOOLCHAIN/bin/llvm-ranlib" \
+  NM="$TOOLCHAIN/bin/llvm-nm" \
+  STRIP="$TOOLCHAIN/bin/llvm-strip" \
+  CFLAGS="$EXTRA_CFLAGS -fPIC -Os" \
+    "$REPO_ROOT/scripts/build-codec-libs.sh"
 
   BUILD_DIR="$WORK_DIR/build-android-$ABI"
   OUT_DIR="$PREBUILT_DIR/$ABI"
@@ -60,6 +77,8 @@ for ABI in $ABIS; do
   echo "==> configuring ffmpeg for $ABI"
   (
     cd "$BUILD_DIR"
+    # Restrict pkg-config to the cross prefix so libopus resolves there, never on the host.
+    export PKG_CONFIG_LIBDIR="$CODEC_PREFIX/lib/pkgconfig"
     "$SRC_DIR/configure" \
       --prefix="$OUT_DIR" \
       --target-os=android \
@@ -75,8 +94,9 @@ for ABI in $ABIS; do
       --ranlib="$TOOLCHAIN/bin/llvm-ranlib" \
       --strip="$TOOLCHAIN/bin/llvm-strip" \
       --sysroot="$TOOLCHAIN/sysroot" \
-      --extra-cflags="$EXTRA_CFLAGS" \
-      --extra-ldflags="-Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384" \
+      --extra-cflags="$EXTRA_CFLAGS -I$CODEC_PREFIX/include" \
+      --extra-ldflags="-Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384 -L$CODEC_PREFIX/lib" \
+      --pkg-config-flags=--static \
       --enable-shared \
       --disable-static \
       --enable-pic \

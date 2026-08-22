@@ -88,7 +88,11 @@ describe('every advertised codec/container pair', () => {
         const asset = await Media.probe(readback)
         expect(asset.audioStreams.length).toStrictEqual(1)
         expect(asset.audioStreams[0]!.codec).toStrictEqual(pair.codec)
-        expect(asset.audioStreams[0]!.sampleRate).toStrictEqual(RATE)
+        // Opus only encodes at its own rates, so the muxed file is checked
+        // against the rate the engine reported rather than the source rate.
+        expect(asset.audioStreams[0]!.sampleRate).toStrictEqual(
+          report.outputSampleRate ?? RATE
+        )
         expect(asset.container).toStrictEqual(
           PROBED_AS[pair.container] ?? pair.container
         )
