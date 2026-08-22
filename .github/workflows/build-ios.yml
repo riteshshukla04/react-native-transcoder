@@ -38,6 +38,10 @@ jobs:
           path: packages/react-native-transcoder/dependencies/prebuilt/ios
           key: ffmpeg-ios-${{ hashFiles('scripts/build-ffmpeg-ios.sh') }}
 
+      - name: Install FFmpeg build tools
+        if: steps.ffmpeg-cache.outputs.cache-hit != 'true'
+        run: brew install nasm
+
       - name: Cross-build FFmpeg
         if: steps.ffmpeg-cache.outputs.cache-hit != 'true'
         run: ./scripts/build-ffmpeg-ios.sh
