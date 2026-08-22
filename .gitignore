@@ -21,3 +21,4 @@ packages/react-native-transcoder/dependencies/src/
 tools/media-bench/results/
 example/.harness/
 *.tsbuildinfo
+.media/

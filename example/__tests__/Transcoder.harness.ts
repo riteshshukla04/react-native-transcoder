@@ -1,8 +1,7 @@
 import { describe, it, expect } from 'react-native-harness'
 import { Media, parseTranscoderError } from 'react-native-transcoder'
 import type { MediaDestination, MediaSource } from 'react-native-transcoder'
-
-const outputPath = (name: string) => `${Media.scratchDirectory}/${name}`
+import { outputPath } from '../src/lib/audio'
 
 describe('MediaFactory lifecycle', () => {
   it('exposes a version without touching the engine', () => {

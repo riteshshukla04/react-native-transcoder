@@ -13,6 +13,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # Pinned so CI and local runs format identically.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
       - name: Install clang-format
-        run: sudo apt-get update && sudo apt-get install -y clang-format
+        run: pip install 'clang-format==21.1.8'
       - run: ./scripts/clang-format.sh --check

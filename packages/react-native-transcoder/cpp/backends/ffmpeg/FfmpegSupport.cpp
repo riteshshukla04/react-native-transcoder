@@ -125,8 +125,10 @@ std::optional<ContainerId> toEngineContainer(const std::string& formatName) {
   if (contains("mp3")) return ContainerId::MP3;
   if (contains("flac")) return ContainerId::FLAC;
   if (contains("ogg")) return ContainerId::OGG;
-  if (contains("webm")) return ContainerId::WEBM;
+  // The Matroska demuxer reports "matroska,webm" for both, so WebM sources also
+  // resolve to the canonical Matroska id.
   if (contains("matroska")) return ContainerId::MATROSKA;
+  if (contains("webm")) return ContainerId::WEBM;
   if (contains("adts") || contains("aac")) return ContainerId::ADTS;
   if (contains("mov") || contains("mp4") || contains("m4a") || contains("ipod")) return ContainerId::M4A;
   if (contains("w64")) return ContainerId::RF64;

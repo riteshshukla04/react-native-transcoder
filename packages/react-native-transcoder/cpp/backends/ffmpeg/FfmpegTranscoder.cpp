@@ -481,6 +481,12 @@ ReportData runPlanInternal(ByteSource& source, ByteSink& sink, const PlanData& p
   return report;
 }
 
+// Combinations `avformat_query_codec` accepts but the muxer then rejects at
+// write_header time. Only demonstrated defects belong here.
+bool isKnownBrokenPair(ContainerId container, AudioCodecId codec) {
+  return container == ContainerId::CAF && codec == AudioCodecId::AAC;
+}
+
 } // namespace
 
 ReportData runPlan(ByteSource& source, ByteSink& sink, const PlanData& plan, const CancellationTokenRef& cancellation,
@@ -529,9 +535,9 @@ void enumerateCapabilities(std::vector<CodecCapability>& decoders, std::vector<C
     }
   }
 
-  constexpr std::array<ContainerId, 9> KNOWN_CONTAINERS{ContainerId::WAV,  ContainerId::AIFF,     ContainerId::CAF,
-                                                        ContainerId::M4A,  ContainerId::MP4,      ContainerId::ADTS,
-                                                        ContainerId::FLAC, ContainerId::MATROSKA, ContainerId::OGG};
+  constexpr std::array<ContainerId, 10> KNOWN_CONTAINERS{
+      ContainerId::WAV,  ContainerId::AIFF, ContainerId::CAF,      ContainerId::M4A, ContainerId::MP4,
+      ContainerId::ADTS, ContainerId::FLAC, ContainerId::MATROSKA, ContainerId::OGG, ContainerId::RF64};
 
   for (ContainerId container : KNOWN_CONTAINERS) {
     const char* muxerName = toMuxerName(container);
@@ -550,9 +556,9 @@ void enumerateCapabilities(std::vector<CodecCapability>& decoders, std::vector<C
         (format->flags & AVFMT_NOFILE) == 0 && container != ContainerId::ADTS && container != ContainerId::MATROSKA;
     for (const auto& encoder : encoders) {
       AVCodecID avId = toAvCodec(encoder.codec);
-      if (avformat_query_codec(format, avId, FF_COMPLIANCE_NORMAL) == 1) {
-        capability.codecs.push_back(encoder.codec);
-      }
+      if (avformat_query_codec(format, avId, FF_COMPLIANCE_NORMAL) != 1) continue;
+      if (isKnownBrokenPair(container, encoder.codec)) continue;
+      capability.codecs.push_back(encoder.codec);
     }
     containers.push_back(std::move(capability));
   }

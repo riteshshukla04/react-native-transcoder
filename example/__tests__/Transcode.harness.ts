@@ -2,47 +2,13 @@ import { describe, it, expect } from 'react-native-harness'
 import { Media, parseTranscoderError } from 'react-native-transcoder'
 import type { TranscodeProgress } from 'react-native-transcoder'
 
+import { makeWav as makeWavBuffer, outputPath } from '../src/lib/audio'
+
 const SAMPLE_RATE = 44100
 const SECONDS = 2
 
-function writeAscii(view: DataView, offset: number, text: string) {
-  for (let i = 0; i < text.length; i++)
-    view.setUint8(offset + i, text.charCodeAt(i))
-}
-
-/** A deterministic 16-bit PCM sine, so decoded output can be checked numerically. */
-function makeWav(seconds = SECONDS, sampleRate = SAMPLE_RATE, channels = 1) {
-  const frames = seconds * sampleRate
-  const dataSize = frames * channels * 2
-  const buffer = new ArrayBuffer(44 + dataSize)
-  const view = new DataView(buffer)
-
-  writeAscii(view, 0, 'RIFF')
-  view.setUint32(4, 36 + dataSize, true)
-  writeAscii(view, 8, 'WAVE')
-  writeAscii(view, 12, 'fmt ')
-  view.setUint32(16, 16, true)
-  view.setUint16(20, 1, true)
-  view.setUint16(22, channels, true)
-  view.setUint32(24, sampleRate, true)
-  view.setUint32(28, sampleRate * channels * 2, true)
-  view.setUint16(32, channels * 2, true)
-  view.setUint16(34, 16, true)
-  writeAscii(view, 36, 'data')
-  view.setUint32(40, dataSize, true)
-
-  for (let i = 0; i < frames; i++) {
-    const sample = Math.round(
-      Math.sin((2 * Math.PI * 440 * i) / sampleRate) * 0.8 * 32767
-    )
-    for (let c = 0; c < channels; c++) {
-      view.setInt16(44 + (i * channels + c) * 2, sample, true)
-    }
-  }
-  return buffer
-}
-
-const outputPath = (name: string) => `${Media.scratchDirectory}/${name}`
+const makeWav = (seconds = SECONDS, sampleRate = SAMPLE_RATE, channels = 1) =>
+  makeWavBuffer({ seconds, sampleRate, channels })
 
 describe('capabilities with the FFmpeg backend linked', () => {
   it('reports real decoders, encoders and containers', async () => {
