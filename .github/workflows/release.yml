@@ -48,6 +48,9 @@ jobs:
   preflight:
     name: Check the release secret
     runs-on: ubuntu-latest
+    # PERSONAL_ACCESS_TOKEN is an environment secret, so only jobs that declare
+    # the environment can see it.
+    environment: release
     steps:
       # A dry run neither pushes nor publishes, so it is allowed to proceed
       # without the secret — that is the point of dry-running before setup.
@@ -154,6 +157,7 @@ jobs:
     name: Publish to npm
     needs: [ffmpeg-android, ffmpeg-ios]
     runs-on: ubuntu-latest
+    environment: release
     permissions:
       contents: read # PERSONAL_ACCESS_TOKEN does the pushing, not the built-in token
       id-token: write # npm trusted publishing over OIDC
