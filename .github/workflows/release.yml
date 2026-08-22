@@ -3,11 +3,14 @@ name: Release
 # Manual, because a release cross-builds FFmpeg for seven architectures and an
 # npm version can never be reused. Run it from a green `main`.
 #
-# One-time setup: add an `NPM_TOKEN` repository secret (an npm automation token
-# with publish rights). Once the package exists on npm you can switch to npm
-# trusted publishing instead — configure this repo and workflow file on the
-# package's npm settings page, then delete the `npm config set` line below and
-# the NPM_TOKEN secret. `id-token: write` is already granted for provenance.
+# Publishing uses npm trusted publishing over OIDC — there is no npm token in
+# this repository and none should be added. One-time setup on npmjs.com, under
+# the package's Settings → Trusted Publisher:
+#   Publisher    GitHub Actions
+#   Repository   riteshshukla04/react-native-transcoder
+#   Workflow     release.yml
+# npm then mints a short-lived credential from the `id-token: write` permission
+# below, and generates provenance attestations automatically.
 
 on:
   workflow_dispatch:
@@ -132,8 +135,11 @@ jobs:
           node-version: 24
           registry-url: https://registry.npmjs.org
 
+      # Trusted publishing needs npm >= 11.5.1; the Node 24 image ships an older one.
       - name: Update npm
-        run: npm install -g npm@latest
+        run: |
+          npm install -g npm@latest
+          npm --version
 
       - run: bun install --frozen-lockfile
 
@@ -189,12 +195,9 @@ jobs:
           git config user.name "${GITHUB_ACTOR}"
           git config user.email "${GITHUB_ACTOR}@users.noreply.github.com"
 
+      # No token: npm authenticates over OIDC and attaches provenance itself.
       - name: Create release
         working-directory: packages/react-native-transcoder
-        run: |
-          npm config set //registry.npmjs.org/:_authToken "$NPM_PUBLISH_TOKEN"
-          npm exec -- release-it --ci ${{ inputs.dry-run && '--dry-run' || '' }}
+        run: npm exec -- release-it --ci ${{ inputs.dry-run && '--dry-run' || '' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_PUBLISH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          NPM_CONFIG_PROVENANCE: true
