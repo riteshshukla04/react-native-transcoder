@@ -43,10 +43,27 @@ env:
   NDK_VERSION: 28.2.13676358
 
 jobs:
+  # Checked before the cross-builds: a missing secret surfaces in seconds rather
+  # than after ten minutes of FFmpeg work that then cannot be published.
+  preflight:
+    name: Check the release secret
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require PERSONAL_ACCESS_TOKEN
+        env:
+          PERSONAL_ACCESS_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+        run: |
+          if [ -z "$PERSONAL_ACCESS_TOKEN" ]; then
+            echo "::error::PERSONAL_ACCESS_TOKEN is not set. Create a fine-grained PAT scoped to this repo with Contents: Read and write, then run: gh secret set PERSONAL_ACCESS_TOKEN --repo ${{ github.repository }}"
+            exit 1
+          fi
+          echo "PERSONAL_ACCESS_TOKEN is set"
+
   # The published tarball carries `dependencies/prebuilt/**`, which is gitignored
   # and therefore has to be rebuilt here before anything is packed.
   ffmpeg-android:
     name: FFmpeg (Android, all ABIs)
+    needs: preflight
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -94,6 +111,7 @@ jobs:
 
   ffmpeg-ios:
     name: FFmpeg (iOS XCFrameworks)
+    needs: preflight
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
