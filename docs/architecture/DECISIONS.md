@@ -66,11 +66,19 @@ Cancelling makes FFmpeg fail wherever it happens to be — a read callback, a he
 `runPlan` wraps the whole run and, when the token is set, reports `cancelled` instead of the
 `probe-failed` / `mux-failed` symptom the specific call produced.
 
+## D9 — The Ogg container is advertised from an allowlist
+
+`avformat_query_codec` can only confirm a muxer's single declared `audio_codec`, and the whole Ogg
+family shares one implementation. With `libvorbis` linked it therefore reports Vorbis and nothing
+else, even though the same muxer writes Opus and FLAC perfectly well — which would have silently
+dropped FLAC-in-Ogg from the reported surface and never advertised the Opus-in-Ogg combination the
+README documents. `isKnownGoodPair` mirrors the existing `isKnownBrokenPair` escape hatch: both
+lists hold only combinations demonstrated by actually muxing them.
+
 ## Not built yet
 
 - URL sources and the `NetworkBackend` platform adapters.
 - Platform codec backends (AudioToolbox, MediaCodec) and therefore HE-AAC encode.
-- `libmp3lame`, `libopus`, `libvorbis`, so MP3/Opus/Vorbis are decode-only.
 - Audio processors beyond format conversion, resampling and channel mapping: trim, concat, gain,
   fade, loudness, limiter, dither.
 - Artwork extraction (`MediaAsset.saveArtworkToFile`).

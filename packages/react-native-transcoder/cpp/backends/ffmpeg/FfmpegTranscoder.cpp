@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cstring>
 
 namespace margelo::nitro::transcoder::ffmpeg {
 
@@ -481,10 +482,22 @@ ReportData runPlanInternal(ByteSource& source, ByteSink& sink, const PlanData& p
   return report;
 }
 
-// Combinations `avformat_query_codec` accepts but the muxer then rejects at
-// write_header time. Only demonstrated defects belong here.
+// Combinations `avformat_query_codec` accepts but that do not survive a round
+// trip. Only demonstrated defects belong here.
+//   AAC: the CAF muxer rejects it at write_header time.
+//   FLAC: the CAF muxer writes a `kuki` magic cookie only for ALAC, AMR-NB and
+//   QDM2, so a FLAC stream lands without its STREAMINFO and the CAF demuxer
+//   cannot read the file back.
 bool isKnownBrokenPair(ContainerId container, AudioCodecId codec) {
-  return container == ContainerId::CAF && codec == AudioCodecId::AAC;
+  return container == ContainerId::CAF && (codec == AudioCodecId::AAC || codec == AudioCodecId::FLAC);
+}
+
+// The Ogg family shares one muxer implementation but declares a single
+// `audio_codec`, so `avformat_query_codec` can only ever confirm that one.
+// Every entry here is verified by actually muxing it.
+bool isKnownGoodPair(ContainerId container, AudioCodecId codec) {
+  return container == ContainerId::OGG &&
+         (codec == AudioCodecId::VORBIS || codec == AudioCodecId::OPUS || codec == AudioCodecId::FLAC);
 }
 
 } // namespace
@@ -511,12 +524,19 @@ void enumerateCapabilities(std::vector<CodecCapability>& decoders, std::vector<C
       AudioCodecId::AAC,    AudioCodecId::MP3,     AudioCodecId::FLAC,    AudioCodecId::ALAC,    AudioCodecId::OPUS,
       AudioCodecId::VORBIS, AudioCodecId::AC3,     AudioCodecId::EAC3};
 
-  auto describe = [](AudioCodecId codec, const AVCodec* av, CodecDirection direction) {
+  // Keyed off the encoder actually linked in, so it cannot drift from the build.
+  auto licenseFor = [](const AVCodec* av) -> const char* {
+    if (std::strcmp(av->name, "libmp3lame") == 0) return "LGPL-2.0-or-later";
+    if (std::strcmp(av->name, "libopus") == 0 || std::strcmp(av->name, "libvorbis") == 0) return "BSD-3-Clause";
+    return "LGPL-2.1-or-later";
+  };
+
+  auto describe = [&licenseFor](AudioCodecId codec, const AVCodec* av, CodecDirection direction) {
     CodecCapability capability;
     capability.codec = codec;
     capability.codecName = av->name;
     capability.direction = direction;
-    capability.licenseClass = "LGPL-2.1-or-later";
+    capability.licenseClass = licenseFor(av);
     capability.maxChannelCount = 8;
     capability.supportsVbr = (av->capabilities & AV_CODEC_CAP_VARIABLE_FRAME_SIZE) != 0;
     for (int rate : supportedConfig<int>(av, AV_CODEC_CONFIG_SAMPLE_RATE)) {
@@ -535,9 +555,10 @@ void enumerateCapabilities(std::vector<CodecCapability>& decoders, std::vector<C
     }
   }
 
-  constexpr std::array<ContainerId, 10> KNOWN_CONTAINERS{
-      ContainerId::WAV,  ContainerId::AIFF, ContainerId::CAF,      ContainerId::M4A, ContainerId::MP4,
-      ContainerId::ADTS, ContainerId::FLAC, ContainerId::MATROSKA, ContainerId::OGG, ContainerId::RF64};
+  constexpr std::array<ContainerId, 11> KNOWN_CONTAINERS{ContainerId::WAV,  ContainerId::AIFF,     ContainerId::CAF,
+                                                         ContainerId::M4A,  ContainerId::MP4,      ContainerId::ADTS,
+                                                         ContainerId::FLAC, ContainerId::MATROSKA, ContainerId::OGG,
+                                                         ContainerId::RF64, ContainerId::MP3};
 
   for (ContainerId container : KNOWN_CONTAINERS) {
     const char* muxerName = toMuxerName(container);
@@ -556,7 +577,8 @@ void enumerateCapabilities(std::vector<CodecCapability>& decoders, std::vector<C
         (format->flags & AVFMT_NOFILE) == 0 && container != ContainerId::ADTS && container != ContainerId::MATROSKA;
     for (const auto& encoder : encoders) {
       AVCodecID avId = toAvCodec(encoder.codec);
-      if (avformat_query_codec(format, avId, FF_COMPLIANCE_NORMAL) != 1) continue;
+      if (avformat_query_codec(format, avId, FF_COMPLIANCE_NORMAL) != 1 && !isKnownGoodPair(container, encoder.codec))
+        continue;
       if (isKnownBrokenPair(container, encoder.codec)) continue;
       capability.codecs.push_back(encoder.codec);
     }

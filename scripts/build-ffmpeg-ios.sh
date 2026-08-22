@@ -18,10 +18,13 @@ SRC_DIR="$WORK_DIR/ffmpeg-$FFMPEG_VERSION"
 COMPONENTS=(
   --enable-demuxer=wav,aiff,caf,mov,mp3,flac,ogg,matroska,aac,w64,pcm_s16le,pcm_f32le
   --enable-muxer=wav,aiff,caf,ipod,mp4,mp3,flac,ogg,matroska,adts,w64
-  --enable-decoder=pcm_s16le,pcm_s16be,pcm_s24le,pcm_s32le,pcm_f32le,pcm_f64le,pcm_u8,pcm_alaw,pcm_mulaw,aac,mp3,mp3float,flac,alac,vorbis,opus
-  --enable-encoder=pcm_s16le,pcm_s16be,pcm_s24le,pcm_s32le,pcm_f32le,pcm_u8,aac,flac,alac
+  --enable-decoder=pcm_s8,pcm_s16le,pcm_s16be,pcm_s24le,pcm_s24be,pcm_s32le,pcm_s32be,pcm_f32le,pcm_f32be,pcm_f64le,pcm_f64be,pcm_u8,pcm_alaw,pcm_mulaw,aac,mp3,mp3float,flac,alac,vorbis,opus
+  --enable-encoder=pcm_s16le,pcm_s16be,pcm_s24le,pcm_s32le,pcm_f32le,pcm_u8,aac,flac,alac,libmp3lame,libopus,libvorbis
   --enable-parser=aac,aac_latm,flac,mpegaudio,vorbis,opus
   --enable-bsf=aac_adtstoasc,extract_extradata
+  --enable-libmp3lame
+  --enable-libopus
+  --enable-libvorbis
 )
 
 mkdir -p "$WORK_DIR"
@@ -47,9 +50,25 @@ build_slice() {
   rm -rf "$BUILD_DIR" "$PREFIX"
   mkdir -p "$BUILD_DIR"
 
+  # LAME, Opus and Vorbis are static archives linked into the shared FFmpeg libraries.
+  # The triple must say aarch64: naming it arm-apple-darwin makes Opus build its
+  # 32-bit ARM assembly, which Apple's assembler rejects.
+  local CODEC_PREFIX="$WORK_DIR/codec-ios-$NAME"
+  local CODEC_HOST=x86_64-apple-darwin
+  [ "$ARCH" = "arm64" ] && CODEC_HOST=aarch64-apple-darwin
+  CODEC_PREFIX="$CODEC_PREFIX" \
+  CODEC_HOST="$CODEC_HOST" \
+  CODEC_WORK_DIR="$WORK_DIR" \
+  CC="$(xcrun -f clang)" \
+  CFLAGS="-arch $ARCH -isysroot $SYSROOT $MIN_FLAG -fPIC -Os" \
+  LDFLAGS="-arch $ARCH -isysroot $SYSROOT $MIN_FLAG" \
+    "$REPO_ROOT/scripts/build-codec-libs.sh"
+
   echo "==> configuring ffmpeg for $NAME"
   (
     cd "$BUILD_DIR"
+    # Restrict pkg-config to the cross prefix so libopus resolves there, never on the host.
+    export PKG_CONFIG_LIBDIR="$CODEC_PREFIX/lib/pkgconfig"
     "$SRC_DIR/configure" \
       --prefix="$PREFIX" \
       --target-os=darwin \
@@ -58,8 +77,9 @@ build_slice() {
       --cc="$(xcrun -f clang)" \
       --as="$(xcrun -f clang)" \
       --sysroot="$SYSROOT" \
-      --extra-cflags="-arch $ARCH -isysroot $SYSROOT $MIN_FLAG -fembed-bitcode-marker" \
-      --extra-ldflags="-arch $ARCH -isysroot $SYSROOT $MIN_FLAG" \
+      --extra-cflags="-arch $ARCH -isysroot $SYSROOT $MIN_FLAG -fembed-bitcode-marker -I$CODEC_PREFIX/include" \
+      --extra-ldflags="-arch $ARCH -isysroot $SYSROOT $MIN_FLAG -L$CODEC_PREFIX/lib" \
+      --pkg-config-flags=--static \
       --install-name-dir='@rpath' \
       --enable-shared \
       --disable-static \

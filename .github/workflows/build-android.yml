@@ -7,6 +7,7 @@ on:
       - 'packages/react-native-transcoder/**'
       - 'example/android/**'
       - 'scripts/build-ffmpeg-android.sh'
+      - 'scripts/build-codec-libs.sh'
       - '**/bun.lock'
       - '.github/workflows/build-android.yml'
   pull_request:
@@ -14,6 +15,7 @@ on:
       - 'packages/react-native-transcoder/**'
       - 'example/android/**'
       - 'scripts/build-ffmpeg-android.sh'
+      - 'scripts/build-codec-libs.sh'
       - '**/bun.lock'
       - '.github/workflows/build-android.yml'
 
@@ -45,7 +47,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: packages/react-native-transcoder/dependencies/prebuilt/android
-          key: ffmpeg-android-all-${{ env.NDK_VERSION }}-${{ hashFiles('scripts/build-ffmpeg-android.sh') }}
+          key: ffmpeg-android-all-${{ env.NDK_VERSION }}-${{ hashFiles('scripts/build-ffmpeg-android.sh', 'scripts/build-codec-libs.sh') }}
 
       # Self-healing: a partially populated cache rebuilds only what it is missing.
       - name: Cross-build FFmpeg for any missing ABI
