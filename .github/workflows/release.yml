@@ -130,9 +130,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0 # the changelog is generated from full history
-        env:
-          GITHUB_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
-
+          # checkout persists this for the release push; it reads `token` as an
+          # input, so an env var here would silently leave the default token.
+          token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
 
       - uses: oven-sh/setup-bun@v2
 
