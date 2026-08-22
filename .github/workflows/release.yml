@@ -49,7 +49,10 @@ jobs:
     name: Check the release secret
     runs-on: ubuntu-latest
     steps:
+      # A dry run neither pushes nor publishes, so it is allowed to proceed
+      # without the secret — that is the point of dry-running before setup.
       - name: Require PERSONAL_ACCESS_TOKEN
+        if: ${{ !inputs.dry-run }}
         env:
           PERSONAL_ACCESS_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
         run: |
@@ -160,7 +163,10 @@ jobs:
           fetch-depth: 0 # the changelog is generated from full history
           # checkout persists this for the release push; it reads `token` as an
           # input, so an env var here would silently leave the default token.
-          token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+          # Falls back to the built-in token so a dry run works before the
+          # secret exists — the built-in one cannot push, which a dry run never
+          # does anyway.
+          token: ${{ secrets.PERSONAL_ACCESS_TOKEN || github.token }}
 
       - uses: oven-sh/setup-bun@v2
 
