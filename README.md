@@ -17,13 +17,14 @@ Not just "the API returns something" — the produced media is checked against r
 | Check | Result |
 |---|---|
 | Every advertised codec/container pair, encoded and re-probed on device | **42 / 42** |
-| On-device Harness suite (iOS sim, Android emulator, physical Android) | **39 / 39** on each |
+| On-device Harness suite (iOS sim, Android emulator, physical Android) | **45 / 45** on each |
 | Device-produced files probed and fully decoded by host `ffmpeg` | **108 / 108** |
 | Synthetic tone: device round-trip WAV vs host decode | 89088 / 89088 samples identical |
 | Android output vs iOS output for the same input | byte-identical |
 | Real 8 s 48 kHz stereo MP3 → AAC/M4A | 8.000 s, 384 000 samples, 11.3× realtime |
 | …its tone energies at 220/277/330 Hz vs the source | within 0.1%, no off-band artifacts |
 | Real AAC/M4A → FLAC on device vs host decode of the source | bit-for-bit identical |
+| Metadata `copy` / `replace` / `merge` / `drop`, including through a packet remux | verified per tag |
 
 Manual QA runs through the example app's UI on a physical device — probe, transcode, live
 progress, cancel, and an in-app "run the full matrix" button — not only through the test harness.
