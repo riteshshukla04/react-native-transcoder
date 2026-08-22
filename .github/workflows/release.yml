@@ -1,0 +1,213 @@
+name: Release
+
+# Manual, because a release cross-builds FFmpeg for seven architectures and an
+# npm version can never be reused. Run it from a green `main`.
+#
+# Publishing uses npm trusted publishing over OIDC — there is no npm token in
+# this repository and none should be added. One-time setup on npmjs.com, under
+# the package's Settings → Trusted Publisher:
+#   Publisher    GitHub Actions
+#   Repository   riteshshukla04/react-native-transcoder
+#   Workflow     release.yml
+# npm then mints a short-lived credential from the `id-token: write` permission
+# below, and generates provenance attestations automatically.
+#
+# The one secret this needs is PERSONAL_ACCESS_TOKEN: a fine-grained PAT on this repo
+# with Contents: Read and write. It pushes the release commit and tag and opens
+# the GitHub release. (A secret cannot be called GITHUB_TOKEN — that prefix is
+# reserved — and the built-in token is capped at read on this repo.)
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: Build and pack, but do not publish, tag or push
+        type: boolean
+        default: false
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  NDK_VERSION: 28.2.13676358
+
+jobs:
+  # The published tarball carries `dependencies/prebuilt/**`, which is gitignored
+  # and therefore has to be rebuilt here before anything is packed.
+  ffmpeg-android:
+    name: FFmpeg (Android, all ABIs)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: 17
+
+      - name: Install NDK ${{ env.NDK_VERSION }}
+        run: |
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;${{ env.NDK_VERSION }}"
+
+      - name: Restore FFmpeg build
+        uses: actions/cache@v4
+        with:
+          path: packages/react-native-transcoder/dependencies/prebuilt/android
+          key: ffmpeg-android-all-${{ env.NDK_VERSION }}-${{ hashFiles('scripts/build-ffmpeg-android.sh', 'scripts/build-codec-libs.sh') }}
+
+      - name: Cross-build any missing ABI
+        run: |
+          set -euo pipefail
+          MISSING=""
+          for ABI in armeabi-v7a arm64-v8a x86 x86_64; do
+            if [ ! -f "packages/react-native-transcoder/dependencies/prebuilt/android/$ABI/lib/libavcodec.so" ]; then
+              MISSING="$MISSING $ABI"
+            fi
+          done
+          if [ -z "$MISSING" ]; then
+            echo "all ABIs restored from cache"
+            exit 0
+          fi
+          echo "building:$MISSING"
+          sudo apt-get update && sudo apt-get install -y nasm
+          ANDROID_NDK_HOME=$ANDROID_HOME/ndk/${{ env.NDK_VERSION }} ABIS="$MISSING" ./scripts/build-ffmpeg-android.sh
+
+      # tar keeps permissions and layout that upload-artifact would otherwise flatten.
+      - name: Pack the Android artifact
+        run: tar -czf prebuilt-android.tar.gz -C packages/react-native-transcoder/dependencies/prebuilt android
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: prebuilt-android
+          path: prebuilt-android.tar.gz
+          retention-days: 1
+
+  ffmpeg-ios:
+    name: FFmpeg (iOS XCFrameworks)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Restore FFmpeg XCFrameworks
+        uses: actions/cache@v4
+        with:
+          path: packages/react-native-transcoder/dependencies/prebuilt/ios
+          key: ffmpeg-ios-${{ hashFiles('scripts/build-ffmpeg-ios.sh', 'scripts/build-codec-libs.sh') }}
+
+      - name: Cross-build when the cache is missing or partial
+        run: |
+          set -euo pipefail
+          COMPLETE=1
+          for LIB in avutil swresample avcodec avformat; do
+            if [ ! -d "packages/react-native-transcoder/dependencies/prebuilt/ios/$LIB.xcframework" ]; then
+              COMPLETE=0
+            fi
+          done
+          if [ "$COMPLETE" = "1" ]; then
+            echo "xcframeworks restored from cache"
+            exit 0
+          fi
+          brew install nasm
+          ./scripts/build-ffmpeg-ios.sh
+
+      - name: Pack the iOS artifact
+        run: tar -czf prebuilt-ios.tar.gz -C packages/react-native-transcoder/dependencies/prebuilt ios
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: prebuilt-ios
+          path: prebuilt-ios.tar.gz
+          retention-days: 1
+
+  release:
+    name: Publish to npm
+    needs: [ffmpeg-android, ffmpeg-ios]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read # PERSONAL_ACCESS_TOKEN does the pushing, not the built-in token
+      id-token: write # npm trusted publishing over OIDC
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the changelog is generated from full history
+          # checkout persists this for the release push; it reads `token` as an
+          # input, so an env var here would silently leave the default token.
+          token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+
+      - uses: oven-sh/setup-bun@v2
+
+      # No dependency cache in the release job: a poisoned cache would end up
+      # inside a published artifact.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      # Trusted publishing needs npm >= 11.5.1; the Node 24 image ships an older one.
+      - name: Update npm
+        run: |
+          npm install -g npm@latest
+          npm --version
+
+      - run: bun install --frozen-lockfile
+
+      - name: Typecheck and lint
+        run: |
+          bun run typecheck
+          bun run lint-ci
+
+      - name: Build the TypeScript output
+        run: bun run build
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: prebuilt-*
+          merge-multiple: true
+
+      - name: Unpack the native artifacts
+        run: |
+          set -euo pipefail
+          mkdir -p packages/react-native-transcoder/dependencies/prebuilt
+          tar -xzf prebuilt-android.tar.gz -C packages/react-native-transcoder/dependencies/prebuilt
+          tar -xzf prebuilt-ios.tar.gz -C packages/react-native-transcoder/dependencies/prebuilt
+
+      # Publishing a tarball without its binaries produces a package that cannot
+      # build on either platform, and that version number is burned for good.
+      - name: Verify the tarball carries every binary
+        working-directory: packages/react-native-transcoder
+        run: |
+          set -euo pipefail
+          npm pack --dry-run --json > /tmp/pack.json
+          node -e '
+            var files = require("/tmp/pack.json")[0].files.map(function (f) { return f.path })
+            var required = ["armeabi-v7a", "arm64-v8a", "x86", "x86_64"]
+              .map(function (abi) {
+                return "dependencies/prebuilt/android/jniLibs/" + abi + "/libavcodec.so"
+              })
+              .concat(["avutil", "swresample", "avcodec", "avformat"].map(function (lib) {
+                return "dependencies/prebuilt/ios/" + lib + ".xcframework"
+              }))
+              .concat(["lib/index.js", "lib/index.d.ts", "dependencies/manifest.lock.json"])
+            var missing = required.filter(function (r) {
+              return !files.some(function (f) { return f.indexOf(r) === 0 })
+            })
+            if (missing.length) {
+              console.error("missing from the tarball:\n  " + missing.join("\n  "))
+              process.exit(1)
+            }
+            console.log("tarball carries " + files.length + " files, all required paths present")
+          '
+
+      - name: Configure git
+        run: |
+          git config user.name "${GITHUB_ACTOR}"
+          git config user.email "${GITHUB_ACTOR}@users.noreply.github.com"
+
+      # npm needs no token at all — it authenticates over OIDC and attaches
+      # provenance itself. PERSONAL_ACCESS_TOKEN only pushes the release commit and tag
+      # and opens the GitHub release; release-it reads it via github.tokenRef.
+      - name: Create release
+        working-directory: packages/react-native-transcoder
+        run: npm exec -- release-it --ci ${{ inputs.dry-run && '--dry-run' || '' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
