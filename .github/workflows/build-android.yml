@@ -76,7 +76,7 @@ jobs:
         working-directory: example/android
         run: ./gradlew assembleDebug --no-daemon --build-cache
 
-      - name: Verify every ABI ships and is 16 KB page aligned
+      - name: Verify every ABI ships, and that 64-bit ABIs are 16 KB page aligned
         run: |
           set -euo pipefail
           READELF="$ANDROID_HOME/ndk/${{ env.NDK_VERSION }}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf"
@@ -85,12 +85,16 @@ jobs:
           for ABI in armeabi-v7a arm64-v8a x86 x86_64; do
             test -f "/tmp/apk/lib/$ABI/libNitroTranscoder.so"
             test -f "/tmp/apk/lib/$ABI/libavcodec.so"
-            for SO in /tmp/apk/lib/$ABI/*.so; do
+            echo "$ABI ships"
+          done
+          # 16 KB pages are a 64-bit requirement; 32-bit Android is always 4 KB.
+          for ABI in arm64-v8a x86_64; do
+            for SO in /tmp/apk/lib/$ABI/libNitroTranscoder.so /tmp/apk/lib/$ABI/lib{avcodec,avformat,avutil,swresample}.so; do
               "$READELF" -l "$SO" | awk -v so="$SO" '/LOAD/ {
                 if ($NF != "0x4000" && $NF != "0x10000") { print "unaligned LOAD segment in " so ": " $NF; exit 1 }
               }'
             done
-            echo "$ABI ok"
+            echo "$ABI is 16 KB aligned"
           done
 
       - name: Stop Gradle Daemon

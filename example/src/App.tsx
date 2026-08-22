@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
+  Keyboard,
   SafeAreaView,
   ScrollView,
   StatusBar,
@@ -383,6 +384,10 @@ export default function App() {
               placeholderTextColor={theme.textMuted}
               autoCapitalize="none"
               autoCorrect={false}
+              spellCheck={false}
+              returnKeyType="done"
+              clearButtonMode="while-editing"
+              onSubmitEditing={Keyboard.dismiss}
             />
           )}
           <Button
