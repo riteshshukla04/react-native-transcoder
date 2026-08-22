@@ -211,26 +211,31 @@ jobs:
         working-directory: packages/react-native-transcoder
         run: |
           set -euo pipefail
-          npm pack --dry-run --json > /tmp/pack.json
-          node -e '
-            var files = require("/tmp/pack.json")[0].files.map(function (f) { return f.path })
-            var required = ["armeabi-v7a", "arm64-v8a", "x86", "x86_64"]
-              .map(function (abi) {
-                return "dependencies/prebuilt/android/jniLibs/" + abi + "/libavcodec.so"
-              })
-              .concat(["avutil", "swresample", "avcodec", "avformat"].map(function (lib) {
-                return "dependencies/prebuilt/ios/" + lib + ".xcframework"
-              }))
-              .concat(["lib/index.js", "lib/index.d.ts", "dependencies/manifest.lock.json"])
-            var missing = required.filter(function (r) {
-              return !files.some(function (f) { return f.indexOf(r) === 0 })
-            })
-            if (missing.length) {
-              console.error("missing from the tarball:\n  " + missing.join("\n  "))
-              process.exit(1)
-            }
-            console.log("tarball carries " + files.length + " files, all required paths present")
-          '
+          # Pack for real and read the tarball. `npm pack --json` has changed
+          # shape between npm versions; a tar listing cannot.
+          rm -rf /tmp/packcheck && mkdir -p /tmp/packcheck
+          npm pack --pack-destination /tmp/packcheck > /dev/null
+          TARBALL=$(ls /tmp/packcheck/*.tgz)
+          tar -tzf "$TARBALL" > /tmp/packed-files.txt
+          echo "$(basename "$TARBALL"): $(wc -l < /tmp/packed-files.txt) entries"
+
+          MISSING=""
+          need() { grep -q "^package/$1" /tmp/packed-files.txt || MISSING="$MISSING $1"; }
+          for ABI in armeabi-v7a arm64-v8a x86 x86_64; do
+            need "dependencies/prebuilt/android/jniLibs/$ABI/libavcodec.so"
+          done
+          for LIB in avutil swresample avcodec avformat; do
+            need "dependencies/prebuilt/ios/$LIB.xcframework/"
+          done
+          need "lib/index.js"
+          need "lib/index.d.ts"
+          need "dependencies/manifest.lock.json"
+
+          if [ -n "$MISSING" ]; then
+            echo "::error::missing from the tarball:$MISSING"
+            exit 1
+          fi
+          echo "all required paths present"
 
       - name: Configure git
         run: |
