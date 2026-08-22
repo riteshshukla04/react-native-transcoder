@@ -1,0 +1,23 @@
+name: Lint TypeScript
+
+on:
+  push:
+    branches: [main]
+    paths: ['**/*.ts', '**/*.tsx', '**/*.js', '**/bun.lock', '.github/workflows/lint-typescript.yml']
+  pull_request:
+    paths: ['**/*.ts', '**/*.tsx', '**/*.js', '**/bun.lock', '.github/workflows/lint-typescript.yml']
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint + typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install
+      - run: bun run typecheck
+      - run: bun run lint-ci

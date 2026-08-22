@@ -1,0 +1,15 @@
+BasedOnStyle: LLVM
+IndentWidth: 2
+ColumnLimit: 120
+AccessModifierOffset: -2
+AlwaysBreakTemplateDeclarations: Yes
+PointerAlignment: Left
+DerivePointerAlignment: false
+SortIncludes: true
+IncludeBlocks: Preserve
+AllowShortFunctionsOnASingleLine: Inline
+SpaceAfterTemplateKeyword: false
+AllowShortIfStatementsOnASingleLine: WithoutElse
+AllowShortLoopsOnASingleLine: false
+Standard: c++20
+NamespaceIndentation: None

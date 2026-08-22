@@ -1,0 +1,99 @@
+{
+  "name": "react-native-transcoder",
+  "version": "0.1.0",
+  "description": "\u26a1\ufe0f Fully on-device audio (and later video) transcoding for React Native.",
+  "main": "lib/index",
+  "module": "lib/index",
+  "types": "lib/index.d.ts",
+  "react-native": "src/index",
+  "source": "src/index",
+  "files": [
+    "src",
+    "react-native.config.js",
+    "lib",
+    "nitrogen",
+    "android/build.gradle",
+    "android/gradle.properties",
+    "android/fix-prefab.gradle",
+    "android/CMakeLists.txt",
+    "android/src",
+    "ios/**/*.h",
+    "ios/**/*.m",
+    "ios/**/*.mm",
+    "ios/**/*.cpp",
+    "ios/PrivacyInfo.xcprivacy",
+    "cpp/**/*.h",
+    "cpp/**/*.hpp",
+    "cpp/**/*.cpp",
+    "nitro.json",
+    "*.podspec",
+    "README.md",
+    "dependencies/prebuilt/**/*",
+    "dependencies/manifest.lock.json"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf android/build lib",
+    "lint": "eslint \"**/*.{js,ts,tsx}\" --fix && prettier --write \"**/*.{js,ts,tsx}\"",
+    "lint-ci": "eslint \"**/*.{js,ts,tsx}\" --max-warnings=0 -f @jamesacarr/github-actions && prettier --check \"**/*.{js,ts,tsx}\"",
+    "specs": "tsc && nitrogen --logLevel=\"debug\"",
+    "build": "tsc --noEmit false"
+  },
+  "keywords": [
+    "react-native",
+    "nitro",
+    "audio",
+    "transcoding",
+    "ffmpeg"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/riteshshukla04/react-native-transcoder.git"
+  },
+  "author": "Ritesh Shukla <riteshkumarshukla04@gmail.com>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/riteshshukla04/react-native-transcoder/issues"
+  },
+  "homepage": "https://github.com/riteshshukla04/react-native-transcoder#readme",
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org/"
+  },
+  "devDependencies": {
+    "@react-native/eslint-config": "0.85.3",
+    "@types/react": "^19.2.15",
+    "eslint": "^8.57.1",
+    "eslint-config-prettier": "^10.1.8",
+    "nitrogen": "0.37.0",
+    "prettier": "^3.8.3",
+    "react": "19.2.3",
+    "react-native": "0.85.3",
+    "react-native-nitro-modules": "0.37.0",
+    "typescript": "^5.9.3"
+  },
+  "peerDependencies": {
+    "react": "*",
+    "react-native": "*",
+    "react-native-nitro-modules": "*"
+  },
+  "eslintConfig": {
+    "root": true,
+    "extends": [
+      "@react-native",
+      "prettier"
+    ]
+  },
+  "eslintIgnore": [
+    "node_modules/",
+    "lib/",
+    "nitrogen/"
+  ],
+  "prettier": {
+    "quoteProps": "consistent",
+    "singleQuote": true,
+    "tabWidth": 2,
+    "trailingComma": "es5",
+    "useTabs": false,
+    "semi": false
+  }
+}

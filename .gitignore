@@ -1,0 +1,24 @@
+node_modules/
+.DS_Store
+*.log
+
+# builds
+packages/react-native-transcoder/lib/
+build/
+.cxx/
+android/.gradle/
+example/android/app/build/
+example/ios/Pods/
+example/ios/build/
+DerivedData/
+
+# native deps / prebuilt artifacts
+packages/react-native-transcoder/dependencies/build/
+packages/react-native-transcoder/dependencies/prebuilt/
+packages/react-native-transcoder/dependencies/src/
+
+# bench + capability outputs
+tools/media-bench/results/
+example/.harness/
+*.tsbuildinfo
+.media/

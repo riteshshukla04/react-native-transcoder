@@ -1,0 +1,26 @@
+name: Lint C++
+
+on:
+  push:
+    branches: [main]
+    paths: ['packages/react-native-transcoder/cpp/**', '.clang-format', '.clang-tidy', '.github/workflows/lint-cpp.yml']
+  pull_request:
+    paths: ['packages/react-native-transcoder/cpp/**', '.clang-format', '.clang-tidy', '.github/workflows/lint-cpp.yml']
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  clang-format:
+    name: clang-format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Pinned so CI and local runs format identically.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install clang-format
+        run: pip install 'clang-format==21.1.8'
+      - run: ./scripts/clang-format.sh --check

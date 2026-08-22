@@ -1,0 +1,102 @@
+name: Build Android
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'packages/react-native-transcoder/**'
+      - 'example/android/**'
+      - 'scripts/build-ffmpeg-android.sh'
+      - '**/bun.lock'
+      - '.github/workflows/build-android.yml'
+  pull_request:
+    paths:
+      - 'packages/react-native-transcoder/**'
+      - 'example/android/**'
+      - 'scripts/build-ffmpeg-android.sh'
+      - '**/bun.lock'
+      - '.github/workflows/build-android.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NDK_VERSION: 28.2.13676358
+
+jobs:
+  build:
+    name: assembleDebug (all ABIs)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: 17
+      - run: bun install
+
+      - name: Install NDK ${{ env.NDK_VERSION }}
+        run: $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "ndk;${{ env.NDK_VERSION }}"
+
+      - name: Restore FFmpeg build
+        id: ffmpeg-cache
+        uses: actions/cache@v4
+        with:
+          path: packages/react-native-transcoder/dependencies/prebuilt/android
+          key: ffmpeg-android-all-${{ env.NDK_VERSION }}-${{ hashFiles('scripts/build-ffmpeg-android.sh') }}
+
+      # Self-healing: a partially populated cache rebuilds only what it is missing.
+      - name: Cross-build FFmpeg for any missing ABI
+        run: |
+          set -euo pipefail
+          MISSING=""
+          for ABI in armeabi-v7a arm64-v8a x86 x86_64; do
+            if [ ! -f "packages/react-native-transcoder/dependencies/prebuilt/android/$ABI/lib/libavcodec.so" ]; then
+              MISSING="$MISSING $ABI"
+            fi
+          done
+          if [ -z "$MISSING" ]; then
+            echo "all ABIs restored from cache"
+            exit 0
+          fi
+          echo "building:$MISSING"
+          sudo apt-get update && sudo apt-get install -y nasm
+          ANDROID_NDK_HOME=$ANDROID_HOME/ndk/${{ env.NDK_VERSION }} ABIS="$MISSING" ./scripts/build-ffmpeg-android.sh
+
+      - name: Restore Gradle cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.gradle/caches
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: ${{ runner.os }}-gradle-
+
+      - name: Build
+        working-directory: example/android
+        run: ./gradlew assembleDebug --no-daemon --build-cache
+
+      - name: Verify every ABI ships, and that 64-bit ABIs are 16 KB page aligned
+        run: |
+          set -euo pipefail
+          READELF="$ANDROID_HOME/ndk/${{ env.NDK_VERSION }}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf"
+          APK=example/android/app/build/outputs/apk/debug/app-debug.apk
+          rm -rf /tmp/apk && unzip -q "$APK" -d /tmp/apk
+          for ABI in armeabi-v7a arm64-v8a x86 x86_64; do
+            test -f "/tmp/apk/lib/$ABI/libNitroTranscoder.so"
+            test -f "/tmp/apk/lib/$ABI/libavcodec.so"
+            echo "$ABI ships"
+          done
+          # 16 KB pages are a 64-bit requirement; 32-bit Android is always 4 KB.
+          for ABI in arm64-v8a x86_64; do
+            for SO in /tmp/apk/lib/$ABI/libNitroTranscoder.so /tmp/apk/lib/$ABI/lib{avcodec,avformat,avutil,swresample}.so; do
+              "$READELF" -l "$SO" | awk -v so="$SO" '/LOAD/ {
+                if ($NF != "0x4000" && $NF != "0x10000") { print "unaligned LOAD segment in " so ": " $NF; exit 1 }
+              }'
+            done
+            echo "$ABI is 16 KB aligned"
+          done
+
+      - name: Stop Gradle Daemon
+        working-directory: example/android
+        run: ./gradlew --stop
