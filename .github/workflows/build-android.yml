@@ -43,6 +43,10 @@ jobs:
           path: packages/react-native-transcoder/dependencies/prebuilt/android
           key: ffmpeg-android-${{ env.NDK_VERSION }}-${{ hashFiles('scripts/build-ffmpeg-android.sh') }}
 
+      - name: Install FFmpeg build tools
+        if: steps.ffmpeg-cache.outputs.cache-hit != 'true'
+        run: sudo apt-get update && sudo apt-get install -y nasm
+
       - name: Cross-build FFmpeg
         if: steps.ffmpeg-cache.outputs.cache-hit != 'true'
         run: ANDROID_NDK_HOME=$ANDROID_HOME/ndk/${{ env.NDK_VERSION }} ./scripts/build-ffmpeg-android.sh

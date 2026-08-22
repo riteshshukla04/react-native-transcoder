@@ -100,6 +100,12 @@ try {
 
 Every resource is native-owned and has an idempotent `close()`. Close on every terminal path.
 
+## Documentation
+
+- [API reference](docs/api/README.md) — every method, option and type, with recipes.
+- [Architecture decisions](docs/architecture/DECISIONS.md) — deviations from the plan and why.
+- [Licensing](docs/licensing/README.md) — FFmpeg obligations and the release checklist.
+
 ## Repository layout
 
 ```

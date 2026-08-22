@@ -3,7 +3,7 @@ node_modules/
 *.log
 
 # builds
-lib/
+packages/react-native-transcoder/lib/
 build/
 .cxx/
 android/.gradle/
